@@ -1,0 +1,12 @@
+# Node.js dependencies
+node_modules/
+
+# Firebase service account key
+smartcollar-c69c1-firebase-adminsdk-fbsvc-2c0fbddfb9.json
+
+# Environment variables
+.env
+
+# Optional: logs
+*.log
+
