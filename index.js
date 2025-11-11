@@ -1,6 +1,6 @@
 const express = require("express");
 const admin = require("firebase-admin");
-const serviceAccount = require("./smartcollar-c69c1-firebase-adminsdk-fbsvc-2c0fbddfb9.json"); // your Firebase service account
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 const app = express();
 app.use(express.json());
 
