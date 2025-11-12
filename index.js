@@ -144,7 +144,7 @@ app.get('/testDB', async (req, res) => {
   }
 });
 
-vapp.get('/testNotif', async (req, res) => {
+app.get('/testNotif', async (req, res) => {
   try {
     const { uid, petId } = req.query;
 
