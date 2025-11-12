@@ -127,6 +127,11 @@ async function checkGeofence(uid, petId, latitude, longitude) {
  * Express endpoints
  * Your mobile app should call these whenever bpm/temp/location changes
  */
+
+app.get('/', (req, res) => {
+  res.send('SmartCollar API is running ✅');
+});
+
 app.post("/bpm", async (req, res) => {
   const { uid, petId, value } = req.body;
   await checkThreshold(uid, petId, "bpm", value);
