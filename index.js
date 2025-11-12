@@ -8,8 +8,7 @@ const NOTIFICATION_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://smartcollar-c69c1-default-rtdb.asia-southeast1.firebasedatabase.app
-"
+  databaseURL: "https://smartcollar-c69c1-default-rtdb.asia-southeast1.firebasedatabase.app"
 });
 
 /**
