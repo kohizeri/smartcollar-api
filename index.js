@@ -1,6 +1,7 @@
 const express = require("express");
 const admin = require("firebase-admin");
-const serviceAccount = const path = "/etc/secrets/smartcollar-c69c1-firebase-adminsdk-fbsvc-9a523750d8.json";
+const path = "/etc/secrets/smartcollar-c69c1-firebase-adminsdk-fbsvc-9a523750d8.json";
+const serviceAccount = require(path);
 const app = express();
 app.use(express.json());
 
