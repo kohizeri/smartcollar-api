@@ -128,9 +128,31 @@ async function checkGeofence(uid, petId, latitude, longitude) {
  * Your mobile app should call these whenever bpm/temp/location changes
  */
 
-app.get('/', (req, res) => {
-  res.send('SmartCollar API is running ✅');
+app.get('/getNotif', async (req, res) => {
+  try {
+    const { uid, petId } = req.query;
+
+    if (!uid || !petId) {
+      return res.status(400).json({ error: 'Missing uid or petId' });
+    }
+
+    const notifRef = admin.database().ref('notifications');
+    const notifSettingRef = admin.database().ref(`users/${uid}/pets/${petId}/notification_settings`);
+
+    const [notifSnap, settingSnap] = await Promise.all([
+      notifRef.once('value'),
+      notifSettingRef.once('value')
+    ]);
+
+    res.status(200).json({
+      notifications: notifSnap.val() || {},
+      notification_settings: settingSnap.val() || {}
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
+
 
 app.post("/bpm", async (req, res) => {
   const { uid, petId, value } = req.body;
