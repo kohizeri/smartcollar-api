@@ -2,6 +2,7 @@ const express = require("express");
 const admin = require("firebase-admin");
 const path = "/etc/secrets/smartcollar-c69c1-firebase-adminsdk-fbsvc-9a523750d8.json";
 const serviceAccount = require(path);
+
 const app = express();
 app.use(express.json());
 
@@ -125,18 +126,14 @@ async function checkGeofence(uid, petId, latitude, longitude) {
 
 /**
  * Express endpoints
- * Your mobile app should call these whenever bpm/temp/location changes
  */
+app.get('/', (req, res) => res.send('SmartCollar API is running ✅'));
+
 app.get('/testDB', async (req, res) => {
   try {
-    // Replace with a path that exists in your database
     const testRef = admin.database().ref('/users');
     const snapshot = await testRef.once('value');
-
-    if (!snapshot.exists()) {
-      return res.status(404).json({ message: 'No data found at /users' });
-    }
-
+    if (!snapshot.exists()) return res.status(404).json({ message: 'No data found at /users' });
     res.status(200).json(snapshot.val());
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -147,17 +144,11 @@ app.get('/testDB', async (req, res) => {
 app.get('/testNotif', async (req, res) => {
   try {
     const { uid, petId } = req.query;
-
-    if (!uid || !petId) {
-      return res.status(400).json({ error: 'Missing uid or petId' });
-    }
+    if (!uid || !petId) return res.status(400).json({ error: 'Missing uid or petId' });
 
     const notifSettingRef = admin.database().ref(`users/${uid}/pets/${petId}/notification_settings`);
     const snapshot = await notifSettingRef.once('value');
-
-    if (!snapshot.exists()) {
-      return res.status(404).json({ error: 'No notification settings found' });
-    }
+    if (!snapshot.exists()) return res.status(404).json({ error: 'No notification settings found' });
 
     res.status(200).json(snapshot.val());
   } catch (error) {
@@ -165,12 +156,6 @@ app.get('/testNotif', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-app.get('/', (req, res) => {
-  res.send('SmartCollar API is running ✅');
-});
-
 
 app.post("/bpm", async (req, res) => {
   const { uid, petId, value } = req.body;
@@ -188,6 +173,48 @@ app.post("/location", async (req, res) => {
   const { uid, petId, latitude, longitude } = req.body;
   await checkGeofence(uid, petId, latitude, longitude);
   res.json({ status: "ok" });
+});
+
+/**
+ * Automatic Firebase listeners
+ */
+const db = admin.database();
+const collarDataRef = db.ref("/users");
+
+collarDataRef.on("child_added", (userSnap) => {
+  const uid = userSnap.key;
+
+  userSnap.child("pets").forEach((petSnap) => {
+    const petId = petSnap.key;
+    const collarRef = db.ref(`/users/${uid}/pets/${petId}/collar_data`);
+
+    // BPM listener
+    collarRef.child("bpm").on("value", (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        console.log(`📡 BPM update detected for ${uid}/${petId}: ${value}`);
+        checkThreshold(uid, petId, "bpm", value);
+      }
+    });
+
+    // Temperature listener
+    collarRef.child("temperature").on("value", (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        console.log(`🌡️ Temp update detected for ${uid}/${petId}: ${value}`);
+        checkThreshold(uid, petId, "temperature", value);
+      }
+    });
+
+    // Location listener
+    collarRef.child("location").on("value", (snapshot) => {
+      const loc = snapshot.val();
+      if (loc && loc.latitude && loc.longitude) {
+        console.log(`📍 Location update for ${uid}/${petId}:`, loc);
+        checkGeofence(uid, petId, loc.latitude, loc.longitude);
+      }
+    });
+  });
 });
 
 /**
