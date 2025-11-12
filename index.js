@@ -68,7 +68,15 @@ async function sendPushNotification(uid, title, body, type = null, petId = null)
     // 2️⃣ Get device token
     const tokenSnap = await admin.database().ref(`/users/${uid}/deviceToken`).once("value");
     const token = tokenSnap.val();
-    if (!token) return;
+    
+    // --- ADD THIS LOGGING ---
+    console.log(`Debug: Token for ${uid} is: ${token}`);
+    // --- END LOGGING ---
+    
+    if (!token) {
+        console.log(`Skipping notification for ${uid}: No device token found.`);
+        return;
+    }
 
     // 3️⃣ Construct FCM payload
     const payload = {
