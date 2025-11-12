@@ -53,22 +53,47 @@ async function resetAlertCooldown(uid, petId, alertType) {
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
     const timestamp = Date.now();
-    const notifData = { title, message: body, timestamp, type: type || "alert", petId, source: "server" };
+    const notifData = {
+      title,
+      message: body,
+      timestamp,
+      type: type || "alert",
+      petId,
+      source: "server"
+    };
 
+    // 1️⃣ Store notification in Realtime Database
     await admin.database().ref(`/users/${uid}/notifications`).push().set(notifData);
 
+    // 2️⃣ Get device token
     const tokenSnap = await admin.database().ref(`/users/${uid}/deviceToken`).once("value");
     const token = tokenSnap.val();
     if (!token) return;
 
-    const payload = { notification: { title, body } };
+    // 3️⃣ Construct FCM payload
+    const payload = {
+      notification: {
+        title: title,
+        body: body,
+        sound: "default", // plays sound on device
+      },
+      data: {
+        type: type || "alert",
+        petId: petId || "",
+        timestamp: timestamp.toString(),
+        source: "server",
+      },
+    };
+
+    // 4️⃣ Send to device
     await admin.messaging().sendToDevice(token, payload);
 
-    console.log(`Push notification sent to ${uid}: ${title} - ${body}`);
+    console.log(`✅ Push notification sent to ${uid}: ${title} - ${body}`);
   } catch (error) {
-    console.error("Error sending push notification:", error);
+    console.error("❌ Error sending push notification:", error);
   }
 }
+
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const toRad = (x) => (x * Math.PI) / 180;
