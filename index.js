@@ -127,6 +127,22 @@ async function checkGeofence(uid, petId, latitude, longitude) {
  * Express endpoints
  * Your mobile app should call these whenever bpm/temp/location changes
  */
+app.get('/testDB', async (req, res) => {
+  try {
+    // Replace with a path that exists in your database
+    const testRef = admin.database().ref('/users');
+    const snapshot = await testRef.once('value');
+
+    if (!snapshot.exists()) {
+      return res.status(404).json({ message: 'No data found at /users' });
+    }
+
+    res.status(200).json(snapshot.val());
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.get('/getNotifSettings', async (req, res) => {
   try {
