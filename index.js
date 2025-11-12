@@ -144,7 +144,7 @@ app.get('/testDB', async (req, res) => {
   }
 });
 
-app.get('/getNotifSettings', async (req, res) => {
+vapp.get('/testNotif', async (req, res) => {
   try {
     const { uid, petId } = req.query;
 
@@ -153,13 +153,19 @@ app.get('/getNotifSettings', async (req, res) => {
     }
 
     const notifSettingRef = admin.database().ref(`users/${uid}/pets/${petId}/notification_settings`);
-    const settingSnap = await notifSettingRef.once('value');
+    const snapshot = await notifSettingRef.once('value');
 
-    res.status(200).json(settingSnap.val() || {});
+    if (!snapshot.exists()) {
+      return res.status(404).json({ error: 'No notification settings found' });
+    }
+
+    res.status(200).json(snapshot.val());
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 app.get('/', (req, res) => {
   res.send('SmartCollar API is running ✅');
