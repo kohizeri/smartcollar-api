@@ -79,19 +79,27 @@ async function sendPushNotification(uid, title, body, type = null, petId = null)
     }
 
     // 3️⃣ Construct FCM payload
-    const payload = {
+   const payload = {
       notification: {
         title: title,
         body: body,
-        sound: "default", // plays sound on device
+        sound: "default",
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "smartcollar_channel",
+          sound: "default",
+          defaultSound: true,
+        },
       },
       data: {
         type: type || "alert",
         petId: petId || "",
         timestamp: timestamp.toString(),
-        source: "server",
       },
     };
+
 
     // 4️⃣ Send to device
     await admin.messaging().sendToDevice(token, payload);
