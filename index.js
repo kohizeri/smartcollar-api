@@ -145,6 +145,11 @@ app.get('/getNotifSettings', async (req, res) => {
   }
 });
 
+app.get('/', (req, res) => {
+  res.send('SmartCollar API is running ✅');
+});
+
+
 app.post("/bpm", async (req, res) => {
   const { uid, petId, value } = req.body;
   await checkThreshold(uid, petId, "bpm", value);
