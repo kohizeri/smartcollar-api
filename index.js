@@ -51,6 +51,54 @@ async function resetAlertCooldown(uid, petId, alertType) {
   }
 }
 
+async function incrementStepsAndRest() {
+  try {
+    const usersSnapshot = await db.ref("users").get();
+    if (!usersSnapshot.exists()) return;
+
+    const users = usersSnapshot.val();
+
+    for (const uid in users) {
+      const pets = users[uid].pets;
+      if (!pets) continue;
+
+      for (const petId in pets) {
+        const mobRef = db.ref(`users/${uid}/pets/${petId}/mob_data`);
+        const mobSnapshot = await mobRef.get();
+
+        if (!mobSnapshot.exists) continue;
+
+        const mobData = mobSnapshot.val();
+
+        let { steps, rest_dura, stepsActive, restActive } = mobData;
+
+        steps = steps ?? 0;
+        rest_dura = rest_dura ?? 0;
+        stepsActive = stepsActive !== false;
+        restActive = restActive !== false;
+
+        if (stepsActive) steps += 1;
+        if (restActive) rest_dura += 1;
+
+        await mobRef.update({
+          steps,
+          rest_dura,
+          last_update: new Date().toISOString(),
+        });
+
+        console.log(
+          `Updated pet ${petId} for user ${uid}: steps=${steps}, rest_dura=${rest_dura}`
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error incrementing steps/rest:", err);
+  }
+}
+
+// Run every second
+setInterval(incrementStepsAndRest, 1000);
+
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
     const timestamp = Date.now();
