@@ -133,6 +133,7 @@ async function checkReminders() {
 
     usersSnap.forEach(userSnap => {
       const uid = userSnap.key;
+
       userSnap.child("pets").forEach(petSnap => {
         const petId = petSnap.key;
         const remindersRef = admin.database().ref(`/users/${uid}/pets/${petId}/reminders`);
@@ -142,35 +143,55 @@ async function checkReminders() {
 
           snapshot.forEach(reminderSnap => {
             const reminder = reminderSnap.val();
-            const reminderId = reminderSnap.key;
+            const reminderKey = reminderSnap.key; // this is now the title (e.g., "Pang")
 
             if (reminder.completed) return;
 
-            const reminderDate = new Date(reminder.date);
-            const reminderDateStr = reminderDate.toISOString().split("T")[0];
-            const oneHourBefore = new Date(reminderDate.getTime() - 60 * 60 * 1000);
+            // Combine date + time for full reminder datetime
+            const reminderDateTime = new Date(`${reminder.date}T${reminder.time}`);
+            const reminderDateStr = reminder.date;
 
-            console.log(`🔔 Checking reminder ${reminderId} for ${uid}/${petId}: ${reminder.title} at ${reminder.date}`);
+            const oneHourBefore = new Date(reminderDateTime.getTime() - 60 * 60 * 1000);
+
+            console.log(`🔔 Checking reminder ${reminderKey} for ${uid}/${petId}: ${reminder.title} at ${reminder.date} ${reminder.time}`);
 
             // 1️⃣ 1-hour-before notification
-            if (!reminder.oneHourNotifSent && now >= oneHourBefore && now < reminderDate) {
+            if (!reminder.oneHourNotifSent && now >= oneHourBefore && now < reminderDateTime) {
               console.log(`💡 Sending 1-hour-before notification for ${reminder.title}`);
-              sendPushNotification(uid, `Reminder: ${reminder.title}`, `Your pet has an upcoming task in 1 hour: ${reminder.notes || ""}`, "reminder", petId);
-              remindersRef.child(`${reminderId}/oneHourNotifSent`).set(true);
+              sendPushNotification(
+                uid,
+                `Reminder: ${reminder.title}`,
+                `Your pet has an upcoming task in 1 hour: ${reminder.notes || ""}`,
+                "reminder",
+                petId
+              );
+              remindersRef.child(`${reminderKey}/oneHourNotifSent`).set(true);
             }
 
-            // 2️⃣ Same-day notification
+            // 2️⃣ Same-day notification (ignore time)
             if (!reminder.dayNotifSent && todayStr === reminderDateStr) {
               console.log(`💡 Sending same-day notification for ${reminder.title}`);
-              sendPushNotification(uid, `Reminder: ${reminder.title}`, `Today's task for your pet: ${reminder.notes || ""}`, "reminder", petId);
-              remindersRef.child(`${reminderId}/dayNotifSent`).set(true);
+              sendPushNotification(
+                uid,
+                `Reminder: ${reminder.title}`,
+                `Today's task for your pet: ${reminder.notes || ""}`,
+                "reminder",
+                petId
+              );
+              remindersRef.child(`${reminderKey}/dayNotifSent`).set(true);
             }
 
             // 3️⃣ Tomorrow notification
             if (!reminder.tomorrowNotifSent && tomorrowStr === reminderDateStr) {
               console.log(`💡 Sending tomorrow notification for ${reminder.title}`);
-              sendPushNotification(uid, `Reminder: ${reminder.title}`, `Reminder for tomorrow: ${reminder.notes || ""}`, "reminder", petId);
-              remindersRef.child(`${reminderId}/tomorrowNotifSent`).set(true);
+              sendPushNotification(
+                uid,
+                `Reminder: ${reminder.title}`,
+                `Reminder for tomorrow: ${reminder.notes || ""}`,
+                "reminder",
+                petId
+              );
+              remindersRef.child(`${reminderKey}/tomorrowNotifSent`).set(true);
             }
           });
         });
@@ -183,6 +204,7 @@ async function checkReminders() {
 
 // Run every 10 minutes
 setInterval(checkReminders, REMINDER_CHECK_INTERVAL);
+
 
 
 /**
