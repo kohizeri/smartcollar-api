@@ -68,29 +68,26 @@ async function sendPushNotification(uid, title, body, type = null, petId = null)
     // 2️⃣ Get device token
     const tokenSnap = await admin.database().ref(`/users/${uid}/deviceToken`).once("value");
     const token = tokenSnap.val();
-    
-    // --- ADD THIS LOGGING ---
+
     console.log(`Debug: Token for ${uid} is: ${token}`);
-    // --- END LOGGING ---
-    
+
     if (!token) {
-        console.log(`Skipping notification for ${uid}: No device token found.`);
-        return;
+      console.log(`Skipping notification for ${uid}: No device token found.`);
+      return;
     }
 
-    // 3️⃣ Construct FCM payload
-   const payload = {
+    // 3️⃣ Construct FCM payload (modern structure)
+    const message = {
+      tokens: [token],
       notification: {
         title: title,
         body: body,
-        sound: "default",
       },
       android: {
         priority: "high",
         notification: {
           channelId: "smartcollar_channel",
           sound: "default",
-          defaultSound: true,
         },
       },
       data: {
@@ -100,11 +97,10 @@ async function sendPushNotification(uid, title, body, type = null, petId = null)
       },
     };
 
+    // 4️⃣ Send notification using new method
+    const response = await admin.messaging().sendEachForMulticast(message);
 
-    // 4️⃣ Send to device
-    await admin.messaging().sendToDevice(token, payload);
-
-    console.log(`✅ Push notification sent to ${uid}: ${title} - ${body}`);
+    console.log(`✅ Push notification sent to ${uid}:`, response.successCount, "success,", response.failureCount, "failure(s)");
   } catch (error) {
     console.error("❌ Error sending push notification:", error);
   }
