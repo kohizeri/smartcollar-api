@@ -118,66 +118,71 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-const REMINDER_CHECK_INTERVAL = 60 * 1000; // check every 1 min
-
 // Helper: check for due reminders
-async function checkReminders(uid, petId) {
-  try {
-    const remindersRef = admin.database().ref(`/users/${uid}/pets/${petId}/reminders`);
-    const snapshot = await remindersRef.once("value");
-    if (!snapshot.exists()) return;
+async function checkReminders() {
+  const usersSnap = await admin.database().ref("/users").once("value");
+  const now = new Date();
 
-    const now = Date.now();
+  const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
-    snapshot.forEach(async (reminderSnap) => {
-      const reminder = reminderSnap.val();
-      const reminderId = reminderSnap.key;
+  usersSnap.forEach(userSnap => {
+    const uid = userSnap.key;
+    userSnap.child("pets").forEach(petSnap => {
+      const petId = petSnap.key;
+      const remindersSnap = petSnap.child("reminders");
 
-      if (!reminder.completed) {
-        const reminderTime = new Date(reminder.date).getTime();
+      remindersSnap.forEach(reminderSnap => {
+        const reminder = reminderSnap.val();
+        const reminderId = reminderSnap.key;
 
-        // if reminder is due or past due
-        if (reminderTime <= now) {
-          await sendPushNotification(
+        if (reminder.completed) return; // skip completed reminders
+        const reminderDate = new Date(reminder.date);
+        const reminderDateStr = reminderDate.toISOString().split("T")[0];
+
+        const oneHourBefore = new Date(reminderDate.getTime() - 60 * 60 * 1000);
+
+        // 1️⃣ 1-hour-before notification
+        if (!reminder.oneHourNotifSent && now >= oneHourBefore && now < reminderDate) {
+          sendPushNotification(
             uid,
             `Reminder: ${reminder.title}`,
-            reminder.notes || "No details provided",
+            `Your pet has an upcoming task in 1 hour: ${reminder.notes || ""}`,
             "reminder",
             petId
           );
-
-          // Optionally mark as sent so it doesn't resend
-          // Or keep it false to allow multiple notifications until manually completed
-          // await remindersRef.child(reminderId).update({completed: true});
+          admin.database().ref(`/users/${uid}/pets/${petId}/reminders/${reminderId}/oneHourNotifSent`).set(true);
         }
-      }
-    });
-  } catch (error) {
-    console.error("Error checking reminders:", error);
-  }
-}
 
-// Periodic check for reminders
-const db = admin.database();
-const usersRef = db.ref("/users");
+        // 2️⃣ Same-day notification
+        if (!reminder.dayNotifSent && todayStr === reminderDateStr) {
+          sendPushNotification(
+            uid,
+            `Reminder: ${reminder.title}`,
+            `Today's task for your pet: ${reminder.notes || ""}`,
+            "reminder",
+            petId
+          );
+          admin.database().ref(`/users/${uid}/pets/${petId}/reminders/${reminderId}/dayNotifSent`).set(true);
+        }
 
-// Every interval, loop through users and pets to check reminders
-setInterval(async () => {
-  try {
-    const usersSnap = await usersRef.once("value");
-    usersSnap.forEach((userSnap) => {
-      const uid = userSnap.key;
-      const petsSnap = userSnap.child("pets");
-      petsSnap.forEach(async (petSnap) => {
-        const petId = petSnap.key;
-        await checkReminders(uid, petId);
+        // 3️⃣ Tomorrow notification
+        if (!reminder.tomorrowNotifSent && tomorrowStr === reminderDateStr) {
+          sendPushNotification(
+            uid,
+            `Reminder: ${reminder.title}`,
+            `Reminder for tomorrow: ${reminder.notes || ""}`,
+            "reminder",
+            petId
+          );
+          admin.database().ref(`/users/${uid}/pets/${petId}/reminders/${reminderId}/tomorrowNotifSent`).set(true);
+        }
       });
     });
-  } catch (error) {
-    console.error("Error running reminder check:", error);
-  }
-}, REMINDER_CHECK_INTERVAL);
-
+  });
+}
+setInterval(checkReminders, 10 * 60 * 1000);
 
 /**
  * Threshold & Geofence Checks
