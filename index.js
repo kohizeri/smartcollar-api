@@ -6,17 +6,69 @@ const serviceAccount = require(path);
 const app = express();
 app.use(express.json());
 
-const NOTIFICATION_COOLDOWN_MS = 1 * 60 * 1000; // 2 minutes
-const REMINDER_CHECK_INTERVAL = 10 * 60 * 1000; 
+const NOTIFICATION_COOLDOWN_MS = 1 * 60 * 1000;
+const REMINDER_CHECK_INTERVAL = 10 * 60 * 1000;
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: "https://smartcollar-c69c1-default-rtdb.asia-southeast1.firebasedatabase.app"
 });
 
+const db = admin.database();
+
 /**
- * Helper functions
+ * Store sensor data only when it changes
  */
+async function storeSensorData(uid, petId) {
+  const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
+  let lastBpm = null;
+  let lastTemp = null;
+
+  console.log(`📡 Listening to sensor data for pet ${petId}...`);
+
+  collarRef.on("value", async (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    const { bpm, temperature } = data;
+    const timestamp = Date.now();
+
+    try {
+      // Only save bpm if it changed
+      if (bpm && bpm > 0 && bpm !== lastBpm) {
+        lastBpm = bpm;
+        await db.ref(`users/${uid}/pets/${petId}/history/bpm_readings/${timestamp}`).set(bpm);
+        console.log(`✅ BPM saved for ${petId}: ${bpm}`);
+        await checkThreshold(uid, petId, "bpm", bpm); // Optional: check thresholds immediately
+      }
+
+      // Only save temperature if it changed
+      if (temperature && temperature > 0 && temperature !== lastTemp) {
+        lastTemp = temperature;
+        await db.ref(`users/${uid}/pets/${petId}/history/temp_readings/${timestamp}`).set(temperature);
+        console.log(`🌡️ Temperature saved for ${petId}: ${temperature}`);
+        await checkThreshold(uid, petId, "temperature", temperature);
+      }
+    } catch (err) {
+      console.error(`❌ Error saving sensor data for ${petId}:`, err);
+    }
+  });
+}
+
+/**
+ * Attach storeSensorData to all users/pets
+ */
+const usersRef = db.ref("/users");
+usersRef.on("child_added", (userSnap) => {
+  const uid = userSnap.key;
+  const petsSnap = userSnap.child("pets");
+
+  petsSnap.forEach((petSnap) => {
+    const petId = petSnap.key;
+    storeSensorData(uid, petId);
+  });
+});
+
 async function shouldSendNotification(uid, petId, alertType) {
   try {
     const lastAlertRef = admin
@@ -96,43 +148,6 @@ async function incrementStepsAndRest() {
 // Run every second
 setInterval(incrementStepsAndRest, 1000);
 */
-
-async function storeSensorData(uid, petId) {
-  const db = admin.database();
-  const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
-
-  console.log(`📡 Listening for sensor data from ${petId}...`);
-
-  // Attach listener once
-  collarRef.on("value", async (snapshot) => {
-    const data = snapshot.val();
-    if (!data) return;
-
-    const { bpm, temperature } = data;
-    const timestamp = Date.now();
-
-    try {
-      // BPM logging
-      if (bpm && bpm > 0) {
-        await db
-          .ref(`users/${uid}/pets/${petId}/history/bpm_readings/${timestamp}`)
-          .set(bpm);
-        console.log(`✅ BPM saved for ${petId}: ${bpm}`);
-      }
-
-      // Temperature logging
-      if (temperature && temperature > 0) {
-        await db
-          .ref(`users/${uid}/pets/${petId}/history/temp_readings/${timestamp}`)
-          .set(temperature);
-        console.log(`🌡️ Temperature saved for ${petId}: ${temperature}`);
-      }
-    } catch (error) {
-      console.error(`❌ Error saving sensor data for ${petId}:`, error);
-    }
-  });
-}
-
 
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
