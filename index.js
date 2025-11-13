@@ -105,7 +105,7 @@ async function storeSensorData(uid, petId) {
     const data = snapshot.val();
     if (!data) return;
 
-    const { bpm, Temperature } = data;
+    const { bpm, temperature } = data;
     const timestamp = Date.now();
 
     // BPM logging
@@ -117,7 +117,7 @@ async function storeSensorData(uid, petId) {
     }
 
     // Temperature logging
-    if (Temperature && Temperature > 0) {
+    if (temperature && temperature > 0) {
       await db
         .ref(`users/${uid}/pets/${petId}/history/temp_readings/${timestamp}`)
         .set(Temperature);
