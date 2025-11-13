@@ -6,7 +6,7 @@ const serviceAccount = require(path);
 const app = express();
 app.use(express.json());
 
-const NOTIFICATION_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+const NOTIFICATION_COOLDOWN_MS = 1 * 60 * 1000; // 2 minutes
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -148,18 +148,47 @@ async function checkThreshold(uid, petId, type, value) {
 }
 
 async function checkGeofence(uid, petId, latitude, longitude) {
-  const geoSnap = await admin.database().ref(`/users/${uid}/pets/${petId}/geofence`).once("value");
-  const geofence = geoSnap.val();
-  if (!geofence) return;
+  try {
+    const geoRef = admin.database().ref(`/users/${uid}/pets/${petId}/geofence`);
+    const geoSnap = await geoRef.once("value");
+    const geofence = geoSnap.val();
 
-  const distance = haversineDistance(latitude, longitude, geofence.latitude, geofence.longitude);
-  if (distance > geofence.radius) {
-    const shouldSend = await shouldSendNotification(uid, petId, "geofence");
-    if (shouldSend) await sendPushNotification(uid, "SmartCollar Alert: Geofence", `Your pet has left the safe zone! Distance: ${Math.round(distance)}m`, "geofence", petId);
-  } else {
-    await resetAlertCooldown(uid, petId, "geofence");
+    if (!geofence) {
+      console.log(`No geofence set for ${uid}/${petId}`);
+      return;
+    }
+
+    console.log(`🐾 Checking geofence for ${petId}`);
+    console.log(`Current: ${latitude}, ${longitude}`);
+    console.log(`Fence center: ${geofence.latitude}, ${geofence.longitude} (radius: ${geofence.radius}m)`);
+
+    const distance = haversineDistance(latitude, longitude, geofence.latitude, geofence.longitude);
+    console.log(`📏 Distance from center: ${distance.toFixed(2)} meters`);
+
+    if (distance > geofence.radius) {
+      console.log(`⚠️ ${petId} is OUTSIDE the geofence!`);
+
+      const shouldSend = await shouldSendNotification(uid, petId, "geofence");
+      if (shouldSend) {
+        await sendPushNotification(
+          uid,
+          "SmartCollar Alert: Geofence",
+          `Your pet has left the safe zone! Distance: ${Math.round(distance)}m`,
+          "geofence",
+          petId
+        );
+      } else {
+        console.log(`Notification skipped due to cooldown.`);
+      }
+    } else {
+      console.log(`✅ ${petId} is INSIDE the geofence.`);
+      await resetAlertCooldown(uid, petId, "geofence");
+    }
+  } catch (error) {
+    console.error(`❌ Error checking geofence for ${uid}/${petId}:`, error);
   }
 }
+
 
 /**
  * Express endpoints
