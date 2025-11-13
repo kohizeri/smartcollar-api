@@ -97,6 +97,35 @@ async function incrementStepsAndRest() {
 setInterval(incrementStepsAndRest, 1000);
 */
 
+async function storeSensorData(uid, petId) {
+  const db = admin.database();
+  const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
+
+  collarRef.on("value", async (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    const { bpm, Temperature } = data;
+    const timestamp = Date.now();
+
+    // BPM logging
+    if (bpm && bpm > 0) {
+      await db
+        .ref(`users/${uid}/pets/${petId}/history/bpm_readings/${timestamp}`)
+        .set(bpm);
+      console.log(`✅ BPM saved for ${petId}: ${bpm}`);
+    }
+
+    // Temperature logging
+    if (Temperature && Temperature > 0) {
+      await db
+        .ref(`users/${uid}/pets/${petId}/history/temp_readings/${timestamp}`)
+        .set(Temperature);
+      console.log(`🌡️ Temperature saved for ${petId}: ${Temperature}`);
+    }
+  });
+}
+
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
     const timestamp = Date.now();
