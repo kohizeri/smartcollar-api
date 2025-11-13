@@ -433,7 +433,6 @@ app.post("/location", async (req, res) => {
 /**
  * Automatic Firebase listeners
  */
-const db = admin.database();
 const collarDataRef = db.ref("/users");
 
 collarDataRef.on("child_added", (userSnap) => {
