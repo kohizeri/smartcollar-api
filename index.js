@@ -121,75 +121,68 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 // Helper: check for due reminders
 async function checkReminders() {
   console.log("⏱ Checking reminders at", new Date().toLocaleString());
-  const usersSnap = await admin.database().ref("/users").once("value");
-  const now = new Date();
 
+  const now = new Date();
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
-  usersSnap.forEach(userSnap => {
-    const uid = userSnap.key;
-    userSnap.child("pets").forEach(petSnap => {
-      const petId = petSnap.key;
-      const remindersSnap = petSnap.child("reminders");
+  try {
+    const usersSnap = await admin.database().ref("/users").once("value");
+    if (!usersSnap.exists()) return;
 
-      remindersSnap.forEach(reminderSnap => {
-        const reminder = reminderSnap.val();
-        const reminderId = reminderSnap.key;
+    usersSnap.forEach(userSnap => {
+      const uid = userSnap.key;
+      userSnap.child("pets").forEach(petSnap => {
+        const petId = petSnap.key;
+        const remindersRef = admin.database().ref(`/users/${uid}/pets/${petId}/reminders`);
 
-        if (reminder.completed) return; // skip completed reminders
-        const reminderDate = new Date(reminder.date);
-        const reminderDateStr = reminderDate.toISOString().split("T")[0];
+        remindersRef.once("value", snapshot => {
+          if (!snapshot.exists()) return;
 
-        const oneHourBefore = new Date(reminderDate.getTime() - 60 * 60 * 1000);
+          snapshot.forEach(reminderSnap => {
+            const reminder = reminderSnap.val();
+            const reminderId = reminderSnap.key;
 
-        console.log(`🔔 Checking reminder ${reminderId} for ${uid}/${petId}: ${reminder.title} at ${reminder.date}`);
+            if (reminder.completed) return;
 
-        // 1️⃣ 1-hour-before notification
-        if (!reminder.oneHourNotifSent && now >= oneHourBefore && now < reminderDate) {
-          console.log(`💡 Sending 1-hour-before notification for ${reminder.title}`);
-          sendPushNotification(
-            uid,
-            `Reminder: ${reminder.title}`,
-            `Your pet has an upcoming task in 1 hour: ${reminder.notes || ""}`,
-            "reminder",
-            petId
-          );
-          admin.database().ref(`/users/${uid}/pets/${petId}/reminders/${reminderId}/oneHourNotifSent`).set(true);
-        }
+            const reminderDate = new Date(reminder.date);
+            const reminderDateStr = reminderDate.toISOString().split("T")[0];
+            const oneHourBefore = new Date(reminderDate.getTime() - 60 * 60 * 1000);
 
-        // 2️⃣ Same-day notification
-        if (!reminder.dayNotifSent && todayStr === reminderDateStr) {
-          console.log(`💡 Sending same-day notification for ${reminder.title}`);
-          sendPushNotification(
-            uid,
-            `Reminder: ${reminder.title}`,
-            `Today's task for your pet: ${reminder.notes || ""}`,
-            "reminder",
-            petId
-          );
-          admin.database().ref(`/users/${uid}/pets/${petId}/reminders/${reminderId}/dayNotifSent`).set(true);
-        }
+            console.log(`🔔 Checking reminder ${reminderId} for ${uid}/${petId}: ${reminder.title} at ${reminder.date}`);
 
-        // 3️⃣ Tomorrow notification
-        if (!reminder.tomorrowNotifSent && tomorrowStr === reminderDateStr) {
-          console.log(`💡 Sending tomorrow notification for ${reminder.title}`);
-          sendPushNotification(
-            uid,
-            `Reminder: ${reminder.title}`,
-            `Reminder for tomorrow: ${reminder.notes || ""}`,
-            "reminder",
-            petId
-          );
-          admin.database().ref(`/users/${uid}/pets/${petId}/reminders/${reminderId}/tomorrowNotifSent`).set(true);
-        }
+            // 1️⃣ 1-hour-before notification
+            if (!reminder.oneHourNotifSent && now >= oneHourBefore && now < reminderDate) {
+              console.log(`💡 Sending 1-hour-before notification for ${reminder.title}`);
+              sendPushNotification(uid, `Reminder: ${reminder.title}`, `Your pet has an upcoming task in 1 hour: ${reminder.notes || ""}`, "reminder", petId);
+              remindersRef.child(`${reminderId}/oneHourNotifSent`).set(true);
+            }
+
+            // 2️⃣ Same-day notification
+            if (!reminder.dayNotifSent && todayStr === reminderDateStr) {
+              console.log(`💡 Sending same-day notification for ${reminder.title}`);
+              sendPushNotification(uid, `Reminder: ${reminder.title}`, `Today's task for your pet: ${reminder.notes || ""}`, "reminder", petId);
+              remindersRef.child(`${reminderId}/dayNotifSent`).set(true);
+            }
+
+            // 3️⃣ Tomorrow notification
+            if (!reminder.tomorrowNotifSent && tomorrowStr === reminderDateStr) {
+              console.log(`💡 Sending tomorrow notification for ${reminder.title}`);
+              sendPushNotification(uid, `Reminder: ${reminder.title}`, `Reminder for tomorrow: ${reminder.notes || ""}`, "reminder", petId);
+              remindersRef.child(`${reminderId}/tomorrowNotifSent`).set(true);
+            }
+          });
+        });
       });
     });
-  });
+  } catch (error) {
+    console.error("❌ Error checking reminders:", error);
+  }
 }
 
-setInterval(checkReminders, 10 * 60 * 1000);
+// Run every 10 minutes
+setInterval(checkReminders, REMINDER_CHECK_INTERVAL);
 
 
 /**
