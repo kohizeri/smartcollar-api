@@ -93,7 +93,7 @@ async function incrementStepsAndRest() {
 }
 
 // Run every second
-setInterval(incrementStepsAndRest, 1000);
+setInterval(incrementStepsAndRest, 10000);
 
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
