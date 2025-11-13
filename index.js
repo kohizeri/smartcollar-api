@@ -66,16 +66,13 @@ async function incrementStepsAndRest() {
         const mobRef = db.ref(`users/${uid}/pets/${petId}/mob_data`);
         const mobSnapshot = await mobRef.get();
 
-        if (!mobSnapshot.exists) continue;
+        // Use empty object if mob_data doesn't exist yet
+        const mobData = mobSnapshot.val() || {};
 
-        const mobData = mobSnapshot.val();
-
-        let { steps, rest_dura, stepsActive, restActive } = mobData;
-
-        steps = steps ?? 0;
-        rest_dura = rest_dura ?? 0;
-        stepsActive = stepsActive !== false;
-        restActive = restActive !== false;
+        let steps = mobData.steps ?? 0;
+        let rest_dura = mobData.rest_dura ?? 0;
+        let stepsActive = mobData.stepsActive !== false;
+        let restActive = mobData.restActive !== false;
 
         if (stepsActive) steps += 1;
         if (restActive) rest_dura += 1;
