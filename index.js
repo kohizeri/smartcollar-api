@@ -101,6 +101,9 @@ async function storeSensorData(uid, petId) {
   const db = admin.database();
   const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
 
+  console.log(`📡 Listening for sensor data from ${petId}...`);
+
+  // Attach listener once
   collarRef.on("value", async (snapshot) => {
     const data = snapshot.val();
     if (!data) return;
@@ -108,23 +111,28 @@ async function storeSensorData(uid, petId) {
     const { bpm, temperature } = data;
     const timestamp = Date.now();
 
-    // BPM logging
-    if (bpm && bpm > 0) {
-      await db
-        .ref(`users/${uid}/pets/${petId}/history/bpm_readings/${timestamp}`)
-        .set(bpm);
-      console.log(`✅ BPM saved for ${petId}: ${bpm}`);
-    }
+    try {
+      // BPM logging
+      if (bpm && bpm > 0) {
+        await db
+          .ref(`users/${uid}/pets/${petId}/history/bpm_readings/${timestamp}`)
+          .set(bpm);
+        console.log(`✅ BPM saved for ${petId}: ${bpm}`);
+      }
 
-    // Temperature logging
-    if (temperature && temperature > 0) {
-      await db
-        .ref(`users/${uid}/pets/${petId}/history/temp_readings/${timestamp}`)
-        .set(Temperature);
-      console.log(`🌡️ Temperature saved for ${petId}: ${Temperature}`);
+      // Temperature logging
+      if (temperature && temperature > 0) {
+        await db
+          .ref(`users/${uid}/pets/${petId}/history/temp_readings/${timestamp}`)
+          .set(temperature);
+        console.log(`🌡️ Temperature saved for ${petId}: ${temperature}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error saving sensor data for ${petId}:`, error);
     }
   });
 }
+
 
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
