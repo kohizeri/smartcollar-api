@@ -80,7 +80,6 @@ async function incrementStepsAndRest() {
         await mobRef.update({
           steps,
           rest_dura,
-          last_update: new Date().toISOString(),
         });
 
         console.log(
