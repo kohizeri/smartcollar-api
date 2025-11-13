@@ -7,6 +7,7 @@ const app = express();
 app.use(express.json());
 
 const NOTIFICATION_COOLDOWN_MS = 1 * 60 * 1000; // 2 minutes
+const REMINDER_CHECK_INTERVAL = 10 * 60 * 1000; 
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -117,6 +118,67 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+const REMINDER_CHECK_INTERVAL = 60 * 1000; // check every 1 min
+
+// Helper: check for due reminders
+async function checkReminders(uid, petId) {
+  try {
+    const remindersRef = admin.database().ref(`/users/${uid}/pets/${petId}/reminders`);
+    const snapshot = await remindersRef.once("value");
+    if (!snapshot.exists()) return;
+
+    const now = Date.now();
+
+    snapshot.forEach(async (reminderSnap) => {
+      const reminder = reminderSnap.val();
+      const reminderId = reminderSnap.key;
+
+      if (!reminder.completed) {
+        const reminderTime = new Date(reminder.date).getTime();
+
+        // if reminder is due or past due
+        if (reminderTime <= now) {
+          await sendPushNotification(
+            uid,
+            `Reminder: ${reminder.title}`,
+            reminder.notes || "No details provided",
+            "reminder",
+            petId
+          );
+
+          // Optionally mark as sent so it doesn't resend
+          // Or keep it false to allow multiple notifications until manually completed
+          // await remindersRef.child(reminderId).update({completed: true});
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error checking reminders:", error);
+  }
+}
+
+// Periodic check for reminders
+const db = admin.database();
+const usersRef = db.ref("/users");
+
+// Every interval, loop through users and pets to check reminders
+setInterval(async () => {
+  try {
+    const usersSnap = await usersRef.once("value");
+    usersSnap.forEach((userSnap) => {
+      const uid = userSnap.key;
+      const petsSnap = userSnap.child("pets");
+      petsSnap.forEach(async (petSnap) => {
+        const petId = petSnap.key;
+        await checkReminders(uid, petId);
+      });
+    });
+  } catch (error) {
+    console.error("Error running reminder check:", error);
+  }
+}, REMINDER_CHECK_INTERVAL);
+
+
 /**
  * Threshold & Geofence Checks
  */
@@ -188,6 +250,7 @@ async function checkGeofence(uid, petId, latitude, longitude) {
     console.error(`❌ Error checking geofence for ${uid}/${petId}:`, error);
   }
 }
+
 
 
 /**
