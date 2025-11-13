@@ -120,6 +120,7 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
 // Helper: check for due reminders
 async function checkReminders() {
+  console.log("⏱ Checking reminders at", new Date().toLocaleString());
   const usersSnap = await admin.database().ref("/users").once("value");
   const now = new Date();
 
@@ -143,8 +144,11 @@ async function checkReminders() {
 
         const oneHourBefore = new Date(reminderDate.getTime() - 60 * 60 * 1000);
 
+        console.log(`🔔 Checking reminder ${reminderId} for ${uid}/${petId}: ${reminder.title} at ${reminder.date}`);
+
         // 1️⃣ 1-hour-before notification
         if (!reminder.oneHourNotifSent && now >= oneHourBefore && now < reminderDate) {
+          console.log(`💡 Sending 1-hour-before notification for ${reminder.title}`);
           sendPushNotification(
             uid,
             `Reminder: ${reminder.title}`,
@@ -157,6 +161,7 @@ async function checkReminders() {
 
         // 2️⃣ Same-day notification
         if (!reminder.dayNotifSent && todayStr === reminderDateStr) {
+          console.log(`💡 Sending same-day notification for ${reminder.title}`);
           sendPushNotification(
             uid,
             `Reminder: ${reminder.title}`,
@@ -169,6 +174,7 @@ async function checkReminders() {
 
         // 3️⃣ Tomorrow notification
         if (!reminder.tomorrowNotifSent && tomorrowStr === reminderDateStr) {
+          console.log(`💡 Sending tomorrow notification for ${reminder.title}`);
           sendPushNotification(
             uid,
             `Reminder: ${reminder.title}`,
@@ -182,7 +188,9 @@ async function checkReminders() {
     });
   });
 }
+
 setInterval(checkReminders, 10 * 60 * 1000);
+
 
 /**
  * Threshold & Geofence Checks
