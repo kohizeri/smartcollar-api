@@ -377,6 +377,58 @@ async function checkGeofence(uid, petId, latitude, longitude) {
   }
 }
 
+/**
+ * Detect new reminders created by vets and notify the owner
+ */
+const remindersRootRef = db.ref("/users");
+
+remindersRootRef.on("child_added", (userSnap) => {
+  const uid = userSnap.key;
+
+  // Listen to all reminders of this user across all pets
+  userSnap.child("pets").forEach((petSnap) => {
+    const petId = petSnap.key;
+    const remindersRef = db.ref(`/users/${uid}/reminders`);
+
+    // Trigger when a new reminder is added
+    remindersRef.on("child_added", async (reminderSnap) => {
+      const reminderId = reminderSnap.key;
+      const reminder = reminderSnap.val();
+
+      if (!reminder) return;
+
+      try {
+        // Check if user role is owner
+        const roleSnap = await admin.database().ref(`/users/${uid}/role`).once("value");
+        const role = roleSnap.val();
+
+        if (role !== "owner") {
+          console.log(`Skipped reminder ${reminderId} — user ${uid} is not an owner.`);
+          return;
+        }
+
+        // Check if reminder was requested by vet
+        if (reminder.requestedBy !== "vet") {
+          console.log(`Skipped reminder ${reminderId} — requestedBy is not vet.`);
+          return;
+        }
+
+        console.log(`📢 Sending Vet Reminder Notification to ${uid} for reminder ${reminderId}`);
+
+        await sendPushNotification(
+          uid,
+          "New Vet Reminder",
+          `Your veterinarian added a new reminder: ${reminder.title || "Reminder"}`,
+          "vet_reminder",
+          petId
+        );
+
+      } catch (error) {
+        console.error("❌ Error handling vet reminder notification:", error);
+      }
+    });
+  });
+});
 
 
 /**
