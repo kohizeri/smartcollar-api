@@ -164,30 +164,33 @@ async function sendPushNotification(uid, title, body, type = null, petId = null)
     // 1️⃣ Store notification in Realtime Database
     await admin.database().ref(`/users/${uid}/notifications`).push().set(notifData);
 
-    // 2️⃣ Get device token
-    const tokenSnap = await admin.database().ref(`/users/${uid}/deviceToken`).once("value");
-    const token = tokenSnap.val();
-
-    console.log(`Debug: Token for ${uid} is: ${token}`);
-
-    if (!token) {
-      console.log(`Skipping notification for ${uid}: No device token found.`);
+    // 2️⃣ Get all devices for this user
+    const devicesSnap = await admin.database().ref(`/users/${uid}/devices`).once("value");
+    if (!devicesSnap.exists()) {
+      console.log(`No devices found for ${uid}`);
       return;
     }
 
-    // 3️⃣ Construct FCM payload (modern structure)
+    const devices = devicesSnap.val();
+
+    // 3️⃣ Filter online devices
+    const onlineTokens = [];
+    for (const token in devices) {
+      if (devices[token].isOnline) onlineTokens.push(token);
+    }
+
+    if (onlineTokens.length === 0) {
+      console.log(`No online devices for ${uid}, skipping notification`);
+      return;
+    }
+
+    // 4️⃣ Construct FCM payload
     const message = {
-      tokens: [token],
-      notification: {
-        title: title,
-        body: body,
-      },
+      tokens: onlineTokens,
+      notification: { title, body },
       android: {
         priority: "high",
-        notification: {
-          channelId: "smartcollar_channel",
-          sound: "default",
-        },
+        notification: { channelId: "smartcollar_channel", sound: "default" },
       },
       data: {
         type: type || "alert",
@@ -196,14 +199,15 @@ async function sendPushNotification(uid, title, body, type = null, petId = null)
       },
     };
 
-    // 4️⃣ Send notification using new method
+    // 5️⃣ Send notification
     const response = await admin.messaging().sendEachForMulticast(message);
-
     console.log(`✅ Push notification sent to ${uid}:`, response.successCount, "success,", response.failureCount, "failure(s)");
+
   } catch (error) {
     console.error("❌ Error sending push notification:", error);
   }
 }
+
 
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
