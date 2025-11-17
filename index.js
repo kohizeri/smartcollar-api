@@ -384,56 +384,60 @@ async function checkGeofence(uid, petId, latitude, longitude) {
 /**
  * Detect new reminders created by vets and notify the owner
  */
-const remindersRootRef = db.ref("/users");
+/**
+ * Listen for new vet-created reminders for all users and pets
+ */
+function listenForVetReminders() {
+  const usersRef = db.ref("/users");
 
-remindersRootRef.on("child_added", (userSnap) => {
-  const uid = userSnap.key;
+  usersRef.on("child_added", (userSnap) => {
+    const uid = userSnap.key;
 
-  // Listen to all reminders of this user across all pets
-  userSnap.child("pets").forEach((petSnap) => {
-    const petId = petSnap.key;
-    const remindersRef = db.ref(`/users/${uid}/reminders`);
+    // Loop through all pets for this user
+    userSnap.child("pets").forEach((petSnap) => {
+      const petId = petSnap.key;
+      const remindersRef = db.ref(`/users/${uid}/reminders`);
 
-    // Trigger when a new reminder is added
-    remindersRef.on("child_added", async (reminderSnap) => {
-      const reminderId = reminderSnap.key;
-      const reminder = reminderSnap.val();
+      // Listen for new reminders added by vets
+      remindersRef.on("child_added", async (reminderSnap) => {
+        const reminderId = reminderSnap.key;
+        const reminder = reminderSnap.val();
+        if (!reminder) return;
 
-      if (!reminder) return;
+        try {
+          // Check if the user is an owner
+          const roleSnap = await db.ref(`/users/${uid}/role`).once("value");
+          const role = roleSnap.val();
+          if (role !== "owner") {
+            console.log(`Skipped reminder ${reminderId} — user ${uid} is not an owner.`);
+            return;
+          }
 
-      try {
-        // Check if user role is owner
-        const roleSnap = await admin.database().ref(`/users/${uid}/role`).once("value");
-        const role = roleSnap.val();
+          // Only process reminders requested by vets
+          if (reminder.requestedBy !== "vet") {
+            console.log(`Skipped reminder ${reminderId} — requestedBy is not vet.`);
+            return;
+          }
 
-        if (role !== "owner") {
-          console.log(`Skipped reminder ${reminderId} — user ${uid} is not an owner.`);
-          return;
+          console.log(`📢 Sending Vet Reminder Notification to ${uid} for reminder ${reminderId}`);
+
+          await sendPushNotification(
+            uid,
+            "New Vet Reminder",
+            `Your veterinarian added a new reminder: ${reminder.title || "Reminder"}`,
+            "vet_reminder",
+            petId
+          );
+        } catch (error) {
+          console.error("❌ Error handling vet reminder notification:", error);
         }
-
-        // Check if reminder was requested by vet
-        if (reminder.requestedBy !== "vet") {
-          console.log(`Skipped reminder ${reminderId} — requestedBy is not vet.`);
-          return;
-        }
-
-        console.log(`📢 Sending Vet Reminder Notification to ${uid} for reminder ${reminderId}`);
-
-        await sendPushNotification(
-          uid,
-          "New Vet Reminder",
-          `Your veterinarian added a new reminder: ${reminder.title || "Reminder"}`,
-          "vet_reminder",
-          petId
-        );
-
-      } catch (error) {
-        console.error("❌ Error handling vet reminder notification:", error);
-      }
+      });
     });
   });
-});
+}
 
+// Call the function to start listening
+listenForVetReminders();
 
 /**
  * Express endpoints
