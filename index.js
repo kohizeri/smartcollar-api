@@ -103,7 +103,7 @@ async function resetAlertCooldown(uid, petId, alertType) {
   }
 }
 
-/**
+
 async function incrementStepsAndRest() {
   try {
     const usersSnapshot = await db.ref("users").get();
@@ -117,18 +117,33 @@ async function incrementStepsAndRest() {
 
       for (const petId in pets) {
         const mobRef = db.ref(`users/${uid}/pets/${petId}/mob_data`);
-        const mobSnapshot = await mobRef.get();
+        const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
 
-        // Use empty object if mob_data doesn't exist yet
+        // Get mob_data and collar_data
+        const [mobSnapshot, collarSnapshot] = await Promise.all([mobRef.get(), collarRef.get()]);
+
         const mobData = mobSnapshot.val() || {};
+        const collarData = collarSnapshot.val() || {};
 
         let steps = mobData.steps ?? 0;
         let rest_dura = mobData.rest_dura ?? 0;
         let stepsActive = mobData.stepsActive !== false;
         let restActive = mobData.restActive !== false;
 
-        if (stepsActive) steps += 1;
-        if (restActive) rest_dura += 1;
+        // Get current acceleration from collar_data
+        const acceleration = collarData.acceleration ?? 0;
+
+        // Increment rest_dura only if acceleration < 0.5
+        if (restActive && acceleration < 0.5) {
+          rest_dura += 1;
+        }
+
+        // Increment steps based on acceleration
+        if (stepsActive) {
+          if (acceleration >= 0.5 && acceleration < 3.0) steps += 1;     // walking
+          else if (acceleration >= 3.0 && acceleration < 6.0) steps += 2; // running
+          else if (acceleration >= 6.0) steps += 3;                        // very active
+        }
 
         await mobRef.update({
           steps,
@@ -136,7 +151,7 @@ async function incrementStepsAndRest() {
         });
 
         console.log(
-          `Updated pet ${petId} for user ${uid}: steps=${steps}, rest_dura=${rest_dura}`
+          `Updated pet ${petId} for user ${uid}: acceleration=${acceleration}, steps=${steps}, rest_dura=${rest_dura}`
         );
       }
     }
@@ -145,10 +160,9 @@ async function incrementStepsAndRest() {
   }
 }
 
-
 // Run every second
 setInterval(incrementStepsAndRest, 1000);
-*/
+
 
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
