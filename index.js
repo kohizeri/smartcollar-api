@@ -397,11 +397,30 @@ async function checkGeofence(uid, petId, latitude, longitude) {
 }
 
 /**
- * Detect new reminders created by vets and notify the owner
+ * Update the last_seen array for a pet, keeping only the latest 5 locations
  */
-/**
- * Listen for new vet-created reminders for all users and pets
- */
+async function updateLastSeen(uid, petId, latitude, longitude) {
+  const lastSeenRef = db.ref(`/users/${uid}/pets/${petId}/last_seen`);
+
+  try {
+    const lastSeenSnap = await lastSeenRef.once("value");
+    const lastSeen = lastSeenSnap.val() || [];
+
+    // Add new location with timestamp
+    lastSeen.push({ latitude, longitude, timestamp: Date.now() });
+
+    // Keep only the last 5
+    const updatedLastSeen = lastSeen.slice(-5);
+
+    // Save back to Firebase
+    await lastSeenRef.set(updatedLastSeen);
+
+    console.log(`✅ Updated last_seen for ${petId}:`, updatedLastSeen);
+  } catch (err) {
+    console.error(`❌ Error updating last_seen for ${petId}:`, err);
+  }
+}
+
 /**
  * Listen for new vet-created reminders and send a single combined notification
  */
