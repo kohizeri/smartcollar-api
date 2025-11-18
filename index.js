@@ -403,19 +403,13 @@ async function updateLastSeen(uid, petId, latitude, longitude) {
   const lastSeenRef = db.ref(`/users/${uid}/pets/${petId}/last_seen`);
 
   try {
-    const lastSeenSnap = await lastSeenRef.once("value");
-    const lastSeen = lastSeenSnap.val() || [];
+    await lastSeenRef.set({
+      latitude,
+      longitude,
+      timestamp: Date.now()
+    });
 
-    // Add new location with timestamp
-    lastSeen.push({ latitude, longitude, timestamp: Date.now() });
-
-    // Keep only the last 5
-    const updatedLastSeen = lastSeen.slice(-5);
-
-    // Save back to Firebase
-    await lastSeenRef.set(updatedLastSeen);
-
-    console.log(`✅ Updated last_seen for ${petId}:`, updatedLastSeen);
+    console.log(`✅ Updated last_seen for ${petId}:`, { latitude, longitude });
   } catch (err) {
     console.error(`❌ Error updating last_seen for ${petId}:`, err);
   }
