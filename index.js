@@ -558,6 +558,7 @@ collarDataRef.on("child_added", (userSnap) => {
       if (loc && loc.latitude && loc.longitude) {
         console.log(`📍 Location update for ${uid}/${petId}:`, loc);
         checkGeofence(uid, petId, loc.latitude, loc.longitude);
+        updateLastSeen(uid, petId, loc.latitude, loc.longitude);
       }
     });
   });
