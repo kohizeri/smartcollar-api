@@ -16,9 +16,7 @@ admin.initializeApp({
 
 const db = admin.database();
 
-/**
- * Store sensor data only when it changes
- */
+
 async function storeSensorData(uid, petId) {
   const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
   let lastBpm = null;
