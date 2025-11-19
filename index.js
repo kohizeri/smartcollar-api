@@ -16,7 +16,7 @@ admin.initializeApp({
 
 const db = admin.database();
 
-sendOneTimeLowBatteryAlert();
+//sendOneTimeLowBatteryAlert();
 
 async function storeSensorData(uid, petId) {
   const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
@@ -163,7 +163,7 @@ async function incrementStepsAndRest() {
 setInterval(incrementStepsAndRest, 1000);
 */
 
-async function sendOneTimeLowBatteryAlert() {
+/**async function sendOneTimeLowBatteryAlert() {
   try {
     // Find user by email
     const usersSnap = await db.ref('/users').orderByChild('email').equalTo('dada@gmail.com').once('value');
@@ -215,7 +215,7 @@ async function sendOneTimeLowBatteryAlert() {
     console.error('❌ Error sending low battery alert:', error);
   }
 }
-
+*/
 
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
