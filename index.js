@@ -16,6 +16,7 @@ admin.initializeApp({
 
 const db = admin.database();
 
+sendOneTimeLowBatteryAlert();
 
 async function storeSensorData(uid, petId) {
   const collarRef = db.ref(`users/${uid}/pets/${petId}/collar_data`);
@@ -162,18 +163,26 @@ async function incrementStepsAndRest() {
 setInterval(incrementStepsAndRest, 1000);
 */
 
-async function sendLowBatteryAlert(batteryLevel) {
+async function sendOneTimeLowBatteryAlert() {
   try {
-    // 1️⃣ Find the user by email
+    // Find user by email
     const usersSnap = await db.ref('/users').orderByChild('email').equalTo('dada@gmail.com').once('value');
     if (!usersSnap.exists()) return console.log('No user found with email dada@gmail.com');
 
     usersSnap.forEach(async (userSnap) => {
       const uid = userSnap.key;
+
+      // Check if already sent
+      const alertRef = db.ref(`/users/${uid}/alertsSent/low_battery`);
+      const alertSnap = await alertRef.once('value');
+      if (alertSnap.exists() && alertSnap.val() === true) {
+        return console.log('Low battery alert already sent, skipping...');
+      }
+
+      // Get all devices
       const devicesSnap = await db.ref(`/users/${uid}/devices`).once('value');
       if (!devicesSnap.exists()) return console.log(`No devices for user ${uid}`);
 
-      // 2️⃣ Only send to online devices
       const onlineTokens = [];
       devicesSnap.forEach(deviceSnap => {
         const device = deviceSnap.val();
@@ -182,37 +191,31 @@ async function sendLowBatteryAlert(batteryLevel) {
 
       if (onlineTokens.length === 0) return console.log(`No online devices for ${uid}`);
 
-      // 3️⃣ Check cooldown to send only once
-      const lastAlertRef = db.ref(`/users/${uid}/last_alerts/low_battery`);
-      const lastAlertSnap = await lastAlertRef.once('value');
-      const now = Date.now();
-      if (lastAlertSnap.exists() && now - lastAlertSnap.val() < NOTIFICATION_COOLDOWN_MS) {
-        return console.log('Low battery notification skipped due to cooldown');
-      }
-
-      await lastAlertRef.set(now); // mark as sent
-
-      // 4️⃣ Send push notification
+      // Send push notification
       const message = {
         tokens: onlineTokens,
         notification: {
           title: 'SmartCollar Alert: Low Battery',
-          body: `Your smart collar battery is low (${batteryLevel}%)!`,
+          body: 'Your smart collar battery is low!',
         },
         android: {
           priority: 'high',
           notification: { channelId: 'smartcollar_channel', sound: 'default' },
         },
-        data: { type: 'low_battery', timestamp: now.toString() },
+        data: { type: 'low_battery', timestamp: Date.now().toString() },
       };
 
       const response = await admin.messaging().sendEachForMulticast(message);
       console.log(`✅ Low battery push sent: ${response.successCount} success, ${response.failureCount} failed`);
+
+      // Mark as sent
+      await alertRef.set(true);
     });
   } catch (error) {
     console.error('❌ Error sending low battery alert:', error);
   }
 }
+
 
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
