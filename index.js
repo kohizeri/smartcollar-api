@@ -102,7 +102,7 @@ async function resetAlertCooldown(uid, petId, alertType) {
   }
 }
 
-/**
+
 async function incrementStepsAndRest() {
   try {
     const usersSnapshot = await db.ref("users").get();
@@ -161,7 +161,6 @@ async function incrementStepsAndRest() {
 
 // Run every second
 setInterval(incrementStepsAndRest, 1000);
-*/
 
 /**async function sendOneTimeLowBatteryAlert() {
   try {
