@@ -162,6 +162,58 @@ async function incrementStepsAndRest() {
 setInterval(incrementStepsAndRest, 1000);
 */
 
+async function sendLowBatteryAlert(batteryLevel) {
+  try {
+    // 1️⃣ Find the user by email
+    const usersSnap = await db.ref('/users').orderByChild('email').equalTo('dada@gmail.com').once('value');
+    if (!usersSnap.exists()) return console.log('No user found with email dada@gmail.com');
+
+    usersSnap.forEach(async (userSnap) => {
+      const uid = userSnap.key;
+      const devicesSnap = await db.ref(`/users/${uid}/devices`).once('value');
+      if (!devicesSnap.exists()) return console.log(`No devices for user ${uid}`);
+
+      // 2️⃣ Only send to online devices
+      const onlineTokens = [];
+      devicesSnap.forEach(deviceSnap => {
+        const device = deviceSnap.val();
+        if (device.isOnline) onlineTokens.push(deviceSnap.key);
+      });
+
+      if (onlineTokens.length === 0) return console.log(`No online devices for ${uid}`);
+
+      // 3️⃣ Check cooldown to send only once
+      const lastAlertRef = db.ref(`/users/${uid}/last_alerts/low_battery`);
+      const lastAlertSnap = await lastAlertRef.once('value');
+      const now = Date.now();
+      if (lastAlertSnap.exists() && now - lastAlertSnap.val() < NOTIFICATION_COOLDOWN_MS) {
+        return console.log('Low battery notification skipped due to cooldown');
+      }
+
+      await lastAlertRef.set(now); // mark as sent
+
+      // 4️⃣ Send push notification
+      const message = {
+        tokens: onlineTokens,
+        notification: {
+          title: 'SmartCollar Alert: Low Battery',
+          body: `Your smart collar battery is low (${batteryLevel}%)!`,
+        },
+        android: {
+          priority: 'high',
+          notification: { channelId: 'smartcollar_channel', sound: 'default' },
+        },
+        data: { type: 'low_battery', timestamp: now.toString() },
+      };
+
+      const response = await admin.messaging().sendEachForMulticast(message);
+      console.log(`✅ Low battery push sent: ${response.successCount} success, ${response.failureCount} failed`);
+    });
+  } catch (error) {
+    console.error('❌ Error sending low battery alert:', error);
+  }
+}
+
 async function sendPushNotification(uid, title, body, type = null, petId = null) {
   try {
     const timestamp = Date.now();
