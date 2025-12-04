@@ -1,5 +1,6 @@
 const express = require("express");
 const admin = require("firebase-admin");
+const rateLimit = require("express-rate-limit"); // ✅ Import rate-limit
 const path = "/etc/secrets/smartcollar-c69c1-firebase-adminsdk-fbsvc-9a523750d8.json";
 const serviceAccount = require(path);
 
@@ -16,6 +17,14 @@ admin.initializeApp({
 
 const db = admin.database();
 
+// ================= Rate Limiter Setup =================
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: { error: "Too many requests, please try again later." }
+});
 //sendOneTimeLowBatteryAlert();
 
 async function storeSensorData(uid, petId) {
@@ -520,7 +529,33 @@ listenForVetReminders();
 /**
  * Express endpoints
  */
+
+// Apply rate limiter only to sensitive POST routes
+app.use("/bpm", limiter);
+app.use("/temperature", limiter);
+app.use("/location", limiter);
+
+// ================= Routes =================
 app.get('/', (req, res) => res.send('SmartCollar API is running ✅'));
+
+app.post("/bpm", async (req, res) => {
+  const { uid, petId, value } = req.body;
+  await checkThreshold(uid, petId, "bpm", value);
+  res.json({ status: "ok" });
+});
+
+app.post("/temperature", async (req, res) => {
+  const { uid, petId, value } = req.body;
+  await checkThreshold(uid, petId, "temperature", value);
+  res.json({ status: "ok" });
+});
+
+app.post("/location", async (req, res) => {
+  const { uid, petId, latitude, longitude } = req.body;
+  await checkGeofence(uid, petId, latitude, longitude);
+  res.json({ status: "ok" });
+});
+
 
 app.get('/testDB', async (req, res) => {
   try {
@@ -548,24 +583,6 @@ app.get('/testNotif', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
-});
-
-app.post("/bpm", async (req, res) => {
-  const { uid, petId, value } = req.body;
-  await checkThreshold(uid, petId, "bpm", value);
-  res.json({ status: "ok" });
-});
-
-app.post("/temperature", async (req, res) => {
-  const { uid, petId, value } = req.body;
-  await checkThreshold(uid, petId, "temperature", value);
-  res.json({ status: "ok" });
-});
-
-app.post("/location", async (req, res) => {
-  const { uid, petId, latitude, longitude } = req.body;
-  await checkGeofence(uid, petId, latitude, longitude);
-  res.json({ status: "ok" });
 });
 
 /**
